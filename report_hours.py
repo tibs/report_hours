@@ -19,8 +19,8 @@ import re
 class GiveUp(Exception):
     pass
 
-MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+MONTHS = {'Jan':1, 'Feb':2, 'Mar':3, 'Apr':4, 'May':5, 'Jun':6,
+          'Jul':7, 'Aug':8, 'Sep':9, 'Oct':10, 'Nov':11, 'Dec':12}
 
 DAYS = ('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')
 
@@ -29,13 +29,13 @@ timespan_re = re.compile(r'(\d\d):(\d\d)\.\.(\d\d):(\d\d)')
 class Report(object):
 
     # Sensible defaults for the number of hours I expect to work each day
-    hours_per_day = {'mon': 7.5,
-                     'tue': 7.5,
-                     'wed': 7.5,
-                     'thu': 7.5,
-                     'fri': 7.5,
-                     'sat': 0.0,
-                     'sun': 0.0}
+    hours_per_day = {'Mon': 7.5,
+                     'Tue': 7.5,
+                     'Wed': 7.5,
+                     'Thu': 7.5,
+                     'Fri': 7.5,
+                     'Sat': 0.0,
+                     'Sun': 0.0}
 
     def __init__(self):
         self.hours_per_day = Report.hours_per_day.copy()
@@ -49,13 +49,13 @@ class Report(object):
             Hours per day: 7.5, 7.5, 7.5, 7.5, 7.5, 0.0, 0.0
         """
         print('Hours per day: {0}, {1}, {2}, {3}, {4}, {5}, {6}'.format(
-            self.hours_per_day['mon'],
-            self.hours_per_day['tue'],
-            self.hours_per_day['wed'],
-            self.hours_per_day['thu'],
-            self.hours_per_day['fri'],
-            self.hours_per_day['sat'],
-            self.hours_per_day['sun']))
+            self.hours_per_day['Mon'],
+            self.hours_per_day['Tue'],
+            self.hours_per_day['Wed'],
+            self.hours_per_day['Thu'],
+            self.hours_per_day['Fri'],
+            self.hours_per_day['Sat'],
+            self.hours_per_day['Sun']))
 
     def set_hours(self, text):
         """Given text of the form 'Mon=7.0, Tue=6.0', amend the expected hours
@@ -110,14 +110,14 @@ class Report(object):
             elements = part.split('=')
             if len(elements) != 2:
                 raise GiveUp('{!r} is not <day>=<hours>'.format(part, text))
-            day = elements[0].lower()
-            if day not in self.hours_per_day:
+            day = elements[0]
+            if day.capitalize() not in self.hours_per_day:
                 raise GiveUp('{!r} is not a recognised day name'.format(day))
             try:
                 hours = float(elements[1])
             except ValueError:
                 raise GiveUp('{!r} is not a floating point number of hours'.format(elements[1]))
-            self.hours_per_day[day] = hours
+            self.hours_per_day[day.capitalize()] = hours
 
     def set_year(self, text):
         """Set the year, given it as text.
@@ -253,7 +253,7 @@ class Report(object):
         daynum = spec[1]
         month = spec[2]
 
-        if day.lower() not in self.hours_per_day:
+        if day.capitalize() not in self.hours_per_day:
             raise GiveUp('Expected 3 letter day name, not {!r}'.format(day))
         day = day.capitalize()
 
@@ -266,8 +266,7 @@ class Report(object):
         except ValueError:
             raise GiveUp('Expected integer date (day of month), not {!r}'.format(daynum))
 
-        #raise GiveUp(day, daynum, month, self.year, '=>', MONTHS.index(month))
-        date = datetime.date(self.year, MONTHS.index(month)+1, daynum)
+        date = datetime.date(self.year, MONTHS[month], daynum)
         if DAYS[date.weekday()] != day:
             raise GiveUp('{} {} {} should be {}, not {}'.format(daynum, month, self.year,
                          DAYS[date.weekday()], day))
