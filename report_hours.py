@@ -96,10 +96,17 @@ class Report(object):
             Traceback (most recent call last):
             ...
             GiveUp: 'awkward' is not a floating point number of hours
+
+            >>> r.set_hours('mon=9 tue=8')
+            Traceback (most recent call last):
+            ...
+            GiveUp: 'mon=9 tue=8' contains whitespace - is there a missing comma?
         """
         parts = text.split(',')
         parts = [x.strip() for x in parts]
         for part in parts:
+            if ' ' in part:
+                raise GiveUp('{!r} contains whitespace - is there a missing comma?'.format(part))
             elements = part.split('=')
             if len(elements) != 2:
                 raise GiveUp('{!r} is not <day>=<hours>'.format(part, text))
@@ -217,7 +224,7 @@ class Report(object):
             >>> r.parse_line('Thu 12 Sep for 09:30..08:30 -- backwards')
             Traceback (most recent call last):
             ...
-            GiveUp: Timespan '09:30..08:30' is not positive
+            GiveUp: Timespan '09:30..08:30' is not a positive timespan
 
         """
         line = line.strip()
@@ -283,7 +290,7 @@ class Report(object):
                     raise GiveUp('{}:{} is not a valid time'.format(groups[2], groups[3]))
 
                 if start_time >= end_time:
-                    raise GiveUp('Timespan {!r} is not positive'.format(span))
+                    raise GiveUp('Timespan {!r} is not a positive timespan'.format(span))
 
                 delta = end_time - start_time
                 delta_hours = delta.seconds / (60*60)
@@ -315,11 +322,24 @@ class Report(object):
             ('Thu', 12, 'Sep', 2013, 8.0, 'a comment')
             ('Wed', 3, 'Sep', 2003, 19.0, 'a comment')
         """
+        lineno = 0
         for line in line_source:
-
-            data = self.parse_line(line)
+            lineno += 1
+            try:
+                data = self.parse_line(line)
+            except GiveUp as e:
+                raise GiveUp('Error in line {}\n{}'.format(lineno, e))
             if data:
                 yield data
+
+def report_file(filename):
+    """Report on the hours described in the given filename.
+    """
+
+    r = Report()
+    with open(filename) as fd:
+        for data in r.parse_lines(fd):
+            print(data)
 
 def report(args):
     filename = None
@@ -332,7 +352,7 @@ def report(args):
             import doctest
             failures, tests = doctest.testmod()
             if failures:
-                print('The light is RED')
+                raise GiveUp('The light is RED')
             else:
                 print('The light is GREEN')
             return
@@ -347,8 +367,17 @@ def report(args):
     if not filename:
         filename = 'hours.txt'
 
+    try:
+        report_file(filename)
+    except GiveUp as e:
+        raise GiveUp('Error reading file {!r}\n{}'.format(filename, e))
+
 if __name__ == '__main__':
     args = sys.argv[1:]
-    report(args)
+    try:
+        report(args)
+    except GiveUp as e:
+        print(e)
+        sys.exit(1)
 
 # vim: set tabstop=8 softtabstop=4 shiftwidth=4 expandtab:
