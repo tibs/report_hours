@@ -426,6 +426,21 @@ class Report(object):
                 prev = data
                 yield data
 
+    def show_hours(self, day, hours, width=11):
+        """Return a picture of the hours for this day.
+        """
+        base = int(hours*2)
+        extra = base - int(self.hours_per_day[day])*2
+        if extra > 0:
+            base = base - extra
+        else:
+            extra = 0
+
+        picture = '{}{}'.format('.'*base, '+'*extra)
+
+        desc = '|{{:{:d}s}}'.format(width*2)
+        return desc.format(picture)
+
     def report_lines(self, line_source):
         """Report on the information from our reader.
 
@@ -468,12 +483,20 @@ class Report(object):
         first = last = None
         days_worked = 0
         for date, day, hours, comment in self.parse_lines(line_source):
-            print('{}{} {:02d} {} {:4d} {:4.1f}{}'.format(
-                '-' if day == 'Mon' else ' ',
-                day, date.day, MONTH_NAME[date.month], date.year,
-                hours,
-                ' ('+comment+')' if comment else ''))
 
+            picture1 = self.show_hours(day, hours)
+
+            print('{}{} {:02d} {} {:4d} {:4.1f}'.format(
+                '-' if day == 'Mon' else ' ',
+                day, date.day, MONTH_NAME[date.month], date.year, hours),
+                end='')
+
+            print(picture1, end='')
+
+            if comment:
+                print('({})'.format(comment))
+            else:
+                print()
 
             if hours:
                 days_worked += 1
