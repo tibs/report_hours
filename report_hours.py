@@ -24,7 +24,7 @@ MONTHS = {'Jan':1, 'Feb':2, 'Mar':3, 'Apr':4, 'May':5, 'Jun':6,
 
 DAYS = ('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')
 
-timespan_re = re.compile(r'(\d\d):(\d\d)\.\.(\d\d):(\d\d)')
+timespan_re = re.compile(r'(\d|\d\d):(\d\d)\.\.(\d|\d\d):(\d\d)')
 
 class Report(object):
 
@@ -40,6 +40,9 @@ class Report(object):
     def __init__(self):
         self.hours_per_day = Report.hours_per_day.copy()
         self.year = datetime.date.today().year
+
+        self.colon_methods = {':year': self.set_year,
+                              ':expect': self.set_hours}
 
     def report_hours_per_day(self):
         """Report on the current setting of hours-per-day, Mon..Sun
@@ -136,109 +139,36 @@ class Report(object):
         except ValueError:
             raise GiveUp('{!r} is not an integer year'.format(text))
 
-    def parse_line(self, line):
-        """Parse a line, returning None or a data tuple
+    def parse_colon_text(self, colon_word, rest):
+        """Parse words from a line starting with a colon
 
-        For instance:
+        For example:
 
             >>> r = Report()
-            >>> lines = ['# a comment',
-            ...          '',
-            ...          ':year 2013',
-            ...          'Thu 12 Sep 8.0  -- a comment',
-            ...          ':expect Mon=7.0',
-            ...          ':year 2003',
-            ...          ' Wed 3 Sep  19.0   --  we  trim  edge  whitespace',
-            ...          'Thu 4 Sep for 09:00..12:00 12:30..17:30 -- time spans']
-            >>> for line in lines:
-            ...    print(r.parse_line(line))
-            None
-            None
-            None
-            ('Thu', 12, 'Sep', 2013, 8.0, 'a comment')
-            None
-            None
-            ('Wed', 3, 'Sep', 2003, 19.0, 'we  trim  edge  whitespace')
-            ('Thu', 4, 'Sep', 2003, 8.0, 'time spans')
+            >>> r.set_year('2013')
+            >>> r.parse_colon_text(':year', '2003')
+            >>> r.year
+            2003
+            >>> r.parse_colon_text(':expect', 'Mon=6.0')
+            >>> r.report_hours_per_day()
+            Hours per day: 6.0, 7.5, 7.5, 7.5, 7.5, 0.0, 0.0
 
         but:
 
-            >>> r.parse_line('Something something something -- fred')
+            >>> r.parse_colon_text(':fred', '')
             Traceback (most recent call last):
             ...
-            GiveUp: Expecting "<day> <date> <month> <hours>"
-            or "<day> <date> <month> for <timespan> [<timespan> ...]"
-            not: 'Something something something'
-
-            >>> r.parse_line('Something 3 Sep 2.0 -- not a day name')
-            Traceback (most recent call last):
-            ...
-            GiveUp: Expected 3 letter day name, not 'Something'
-
-            >>> r.parse_line('Wed pardon Sep 2.0 -- not a date')
-            Traceback (most recent call last):
-            ...
-            GiveUp: Expected integer date (day of month), not 'pardon'
-
-            >>> r.parse_line('Wed 3 Wednesday 2.0 -- not a month')
-            Traceback (most recent call last):
-            ...
-            GiveUp: Expected 3 letter month name, not 'Wednesday'
-
-            >>> r.parse_line('Wed 3 Sep aagh -- silly hours')
-            Traceback (most recent call last):
-            ...
-            GiveUp: Expected floating point hours, not 'aagh'
-
-            >>> r.parse_line(':year 2013')
-            >>> r.parse_line('Fri 12 Sep 9.0 -- wrong day of week')
-            Traceback (most recent call last):
-            ...
-            GiveUp: 12 Sep 2013 should be Thu, not Fri
-
-            >>> r.parse_line('Thu 12 Sep for fred -- too few ..')
-            Traceback (most recent call last):
-            ...
-            GiveUp: Timespan 'fred' is not <hh>:<mm>..<hh>:<mm>
-
-            >>> r.parse_line('Thu 12 Sep for 9:30..12:30..13:00 -- too many ..')
-            Traceback (most recent call last):
-            ...
-            GiveUp: Timespan '9:30..12:30..13:00' is not <hh>:<mm>..<hh>:<mm>
-
-            >>> r.parse_line('Thu 12 Sep for 999..09:30 -- no :')
-            Traceback (most recent call last):
-            ...
-            GiveUp: Timespan '999..09:30' is not <hh>:<mm>..<hh>:<mm>
-
-            >>> r.parse_line('Thu 12 Sep for 9:30..10:30 -- 09:30, not 9:30')
-            Traceback (most recent call last):
-            ...
-            GiveUp: Timespan '9:30..10:30' is not <hh>:<mm>..<hh>:<mm>
-
-            >>> r.parse_line('Thu 12 Sep for 09:30..fred -- no :')
-            Traceback (most recent call last):
-            ...
-            GiveUp: Timespan '09:30..fred' is not <hh>:<mm>..<hh>:<mm>
-
-            >>> r.parse_line('Thu 12 Sep for 09:30..08:30 -- backwards')
-            Traceback (most recent call last):
-            ...
-            GiveUp: Timespan '09:30..08:30' is not a positive timespan
-
+            GiveUp: Unrecognised colon-command ':fred'
         """
-        line = line.strip()
-        if not line or line[0] == '#':
-            return None
+        try:
+            fn = self.colon_methods[colon_word]
+            fn(rest)
+        except KeyError:
+            raise GiveUp('Unrecognised colon-command {!r}'.format(colon_word))
 
-        if line.startswith(':expect'):
-            self.set_hours(line[7:])
-            return None
-
-        if line.startswith(':year'):
-            self.set_year(line[5:])
-            return None
-
+    def parse_hours_line(self, line):
+        """Parse a line describing the hours for a day
+        """
         parts = line.split('--')
         data = parts[0].rstrip()
         comment = ' '.join(parts[1:]).lstrip()
@@ -302,6 +232,107 @@ class Report(object):
                 raise GiveUp('Expected floating point hours, not {!r}'.format(hours))
 
         return day, daynum, month, self.year, hours, comment
+
+    def parse_line(self, line):
+        """Parse a line, returning None or a data tuple
+
+        For instance:
+
+            >>> r = Report()
+            >>> lines = ['# a comment',
+            ...          '',
+            ...          ':year 2013',
+            ...          'Thu 12 Sep 8.0  -- a comment',
+            ...          ':expect Mon=7.0',
+            ...          ':year 2003',
+            ...          ' Wed 3 Sep  19.0   --  we  trim  edge  whitespace',
+            ...          'Thu 4 Sep for 09:00..12:00 12:30..17:30 -- time spans',
+            ...          'Fri 12 Sep for 8:30..9:30 -- 8:30, not 08:30']
+            >>> for line in lines:
+            ...    print(r.parse_line(line))
+            None
+            None
+            None
+            ('Thu', 12, 'Sep', 2013, 8.0, 'a comment')
+            None
+            None
+            ('Wed', 3, 'Sep', 2003, 19.0, 'we  trim  edge  whitespace')
+            ('Thu', 4, 'Sep', 2003, 8.0, 'time spans')
+            ('Fri', 12, 'Sep', 2003, 1.0, '8:30, not 08:30')
+
+        but:
+
+            >>> r.parse_line('Something something something -- fred')
+            Traceback (most recent call last):
+            ...
+            GiveUp: Expecting "<day> <date> <month> <hours>"
+            or "<day> <date> <month> for <timespan> [<timespan> ...]"
+            not: 'Something something something'
+
+            >>> r.parse_line('Something 3 Sep 2.0 -- not a day name')
+            Traceback (most recent call last):
+            ...
+            GiveUp: Expected 3 letter day name, not 'Something'
+
+            >>> r.parse_line('Wed pardon Sep 2.0 -- not a date')
+            Traceback (most recent call last):
+            ...
+            GiveUp: Expected integer date (day of month), not 'pardon'
+
+            >>> r.parse_line('Wed 3 Wednesday 2.0 -- not a month')
+            Traceback (most recent call last):
+            ...
+            GiveUp: Expected 3 letter month name, not 'Wednesday'
+
+            >>> r.parse_line('Wed 3 Sep aagh -- silly hours')
+            Traceback (most recent call last):
+            ...
+            GiveUp: Expected floating point hours, not 'aagh'
+
+            >>> r.parse_line(':year 2013')
+            >>> r.parse_line('Fri 12 Sep 9.0 -- wrong day of week')
+            Traceback (most recent call last):
+            ...
+            GiveUp: 12 Sep 2013 should be Thu, not Fri
+
+            >>> r.parse_line('Thu 12 Sep for fred -- too few ..')
+            Traceback (most recent call last):
+            ...
+            GiveUp: Timespan 'fred' is not <hh>:<mm>..<hh>:<mm>
+
+            >>> r.parse_line('Thu 12 Sep for 9:30..12:30..13:00 -- too many ..')
+            Traceback (most recent call last):
+            ...
+            GiveUp: Timespan '9:30..12:30..13:00' is not <hh>:<mm>..<hh>:<mm>
+
+            >>> r.parse_line('Thu 12 Sep for 999..09:30 -- no :')
+            Traceback (most recent call last):
+            ...
+            GiveUp: Timespan '999..09:30' is not <hh>:<mm>..<hh>:<mm>
+
+            >>> r.parse_line('Thu 12 Sep for 09:30..fred -- no :')
+            Traceback (most recent call last):
+            ...
+            GiveUp: Timespan '09:30..fred' is not <hh>:<mm>..<hh>:<mm>
+
+            >>> r.parse_line('Thu 12 Sep for 09:30..08:30 -- backwards')
+            Traceback (most recent call last):
+            ...
+            GiveUp: Timespan '09:30..08:30' is not a positive timespan
+
+        """
+        line = line.strip()
+
+        parts = line.split('#')
+        text = parts[0]
+        if not text:
+            return None
+
+        parts = text.split()
+        if parts[0].startswith(':'):
+            self.parse_colon_text(parts[0], text[len(parts[0]):])
+        else:
+            return self.parse_hours_line(text)
 
     def parse_lines(self, line_source):
         """Parse lines from reader, yielding tuples for actual hour reports.
