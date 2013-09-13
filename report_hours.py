@@ -378,25 +378,61 @@ class Report(object):
             >>> r = Report()
             >>> lines = ['# a comment',
             ...          '',
-            ...          ':year 2013',
-            ...          'Thu 12 Sep 8.0  -- a comment',
             ...          ':expect Mon=7.0',
+            ...          ':year 2003',
+            ...          'Wed 3 Sep  19.0  -- a comment',
+            ...          ':year 2013',
+            ...          'Thu 12 Sep 8.0  -- a comment']
+            >>> for data in r.parse_lines(lines):
+            ...    print(data)
+            (datetime.date(2003, 9, 3), 'Wed', 19.0, 'a comment')
+            (datetime.date(2013, 9, 12), 'Thu', 8.0, 'a comment')
+
+        but:
+
+            >>> lines = [':year 2013',
+            ...          'Thu 12 Sep 8.0  -- a comment',
             ...          ':year 2003',
             ...          'Wed 3 Sep  19.0  -- a comment']
             >>> for data in r.parse_lines(lines):
             ...    print(data)
-            (datetime.date(2013, 9, 12), 'Thu', 8.0, 'a comment')
-            (datetime.date(2003, 9, 3), 'Wed', 19.0, 'a comment')
+            Traceback (most recent call last):
+            ...
+            GiveUp: Records out of order, 2003-09-03 comes before 2013-09-12
         """
         lineno = 0
+        prev = None
         for line in line_source:
             lineno += 1
             try:
                 data = self.parse_line(line)
             except GiveUp as e:
                 raise GiveUp('Error in line {}\n{}'.format(lineno, e))
+
             if data:
+                if prev and data < prev:
+                    raise GiveUp('Records out of order, {} comes before {}'.format(
+                        data[0].isoformat(), prev[0].isoformat()))
+                prev = data
                 yield data
+
+    def report_lines(self, line_source):
+        """Report on the information from our reader.
+
+        For instance:
+
+            >>> r = Report()
+            >>> lines = ['# a comment',
+            ...          ':year 2003',
+            ...          'Wed 3 Sep  19.0  -- a comment',
+            ...          ':year 2013',
+            ...          'Thu 12 Sep 8.0  -- a comment']
+            >>> r.report_lines(lines)
+
+        """
+        prev = None
+        for data in self.parse_lines(line_source):
+            pass
 
 def report_file(filename):
     """Report on the hours described in the given filename.
@@ -404,8 +440,7 @@ def report_file(filename):
 
     r = Report()
     with open(filename) as fd:
-        for data in r.parse_lines(fd):
-            print(data)
+        r.report_lines(fd)
 
 def report(args):
     filename = None
