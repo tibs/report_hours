@@ -11,6 +11,6 @@ Fri  6 Sep  8.5     -- setting up the two computers
 
 Mon  9 Sep  7.0     -- setting up eclipse, Kynesim lunch, etc.
 Tue 10 Sep  7.5
-Wed 11 Sep  for 9:00..12:00  12:30..17:30 -- i.e., 3 + 5 = 8
-Thu 12 Sep  for 9:30..12:00  12:30..15:30 -- i.e., 2.5 + 3 = 5.5
+Wed 11 Sep  for 9:00..12:00  12:30..17:30 # i.e., 3 + 5 = 8
+Thu 12 Sep  for 9:30..12:00  12:30..15:30 # i.e., 2.5 + 3 = 5.5
 Fri 13 Sep  0.0		-- not at this work today

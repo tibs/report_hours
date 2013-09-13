@@ -71,14 +71,18 @@ class Report(object):
         self.colon_methods = {':year': self.set_year,
                               ':expect': self.set_hours}
 
-    def report_hours_per_day(self):
+    def report_hours_per_day(self, with_caption=True):
         """Report on the current setting of hours-per-day, Mon..Sun
 
             >>> r = Report()
             >>> r.report_hours_per_day()
             Hours per day: 7.5, 7.5, 7.5, 7.5, 7.5, 0.0, 0.0
+            >>> r.report_hours_per_day(False)
+            7.5, 7.5, 7.5, 7.5, 7.5, 0.0, 0.0
         """
-        print('Hours per day: {0}, {1}, {2}, {3}, {4}, {5}, {6}'.format(
+        if with_caption:
+            print('Hours per day:', end=' ')
+        print('{0}, {1}, {2}, {3}, {4}, {5}, {6}'.format(
             self.hours_per_day['Mon'],
             self.hours_per_day['Tue'],
             self.hours_per_day['Wed'],
@@ -428,19 +432,41 @@ class Report(object):
         For instance:
 
             >>> r = Report()
-            >>> lines = ['# a comment',
-            ...          ':year 2003',
-            ...          'Mon 1 Sep  8.0',
-            ...          'Wed 3 Sep  19.0  -- a comment',
+            >>> lines = ['# a more realistic example',
+            ...          ':expect Mon=6.5, Thu=6.0',
             ...          ':year 2013',
-            ...          'Thu 12 Sep 8.0  -- a comment']
+            ...          'Tue  3 Sep  6.5     -- initial discussions, etc.',
+            ...          'Wed  4 Sep  8.5     -- my laptop, exploring, notebook',
+            ...          'Thu  5 Sep  6.5',
+            ...          'Fri  6 Sep  8.5     -- setting up the two computers',
+            ...          'Mon  9 Sep  7.0     -- inc. Kynesim lunch',
+            ...          'Tue 10 Sep  7.5',
+            ...          'Wed 11 Sep  for 9:00..12:00  12:30..17:30 # i.e., 3 + 5 = 8',
+            ...          'Thu 12 Sep  for 9:30..12:00  12:30..15:30 # i.e., 2.5 + 3 = 5.5',
+            ...          'Fri 13 Sep  0.0     -- not at this work today',
+            ...         ]
             >>> r.report_lines(lines)
-            -Mon 01 Sep 2003  8.0
-             Wed 03 Sep 2003 19.0 (a comment)
-             Thu 12 Sep 2013  8.0 (a comment)
-             Total:          35.0
+             Tue 03 Sep 2013  6.5 (initial discussions, etc.)
+             Wed 04 Sep 2013  8.5 (my laptop, exploring, notebook)
+             Thu 05 Sep 2013  6.5
+             Fri 06 Sep 2013  8.5 (setting up the two computers)
+            -Mon 09 Sep 2013  7.0 (inc. Kynesim lunch)
+             Tue 10 Sep 2013  7.5
+             Wed 11 Sep 2013  8.0
+             Thu 12 Sep 2013  5.5
+             Fri 13 Sep 2013  0.0 (not at this work today)
+             Total:          58.0
+             Expected:       56.0
+             Balance:        +2.0
+             2013-09-03 to 2013-09-13 is 11 days, which is 1 week and 4 days
+             Number of days worked is 8, vaguely expecting 9
+
         """
         total = 0.0
+        total_expected = 0.0
+        total_extra = 0.0
+        first = last = None
+        days_worked = 0
         for date, day, hours, comment in self.parse_lines(line_source):
             print('{}{} {:02d} {} {:4d} {:4.1f}{}'.format(
                 '-' if day == 'Mon' else ' ',
@@ -449,9 +475,43 @@ class Report(object):
                 ' ('+comment+')' if comment else ''))
 
 
-            total += hours
+            if hours:
+                days_worked += 1
+                total += hours
+                # If zero hours were worked, then we don't count it as a
+                # negative expectation
+                expected = self.hours_per_day[day]
+                total_expected += expected
+                total_extra += hours - expected
 
-        print(' Total:        {:6.1f}'.format(total))
+            if not first:
+                first = date
+            last = date
+
+        print(' Total:         {:5.1f}'.format(total))
+        print(' Expected:      {:5.1f}'.format(total_expected))
+        print(' Balance:      {:+6.1f}'.format(total_extra))
+
+        first_day = first.toordinal()
+        last_day = last.toordinal()
+        elapsed = last_day - first_day + 1
+        num_weeks = elapsed//7
+        rem_days = elapsed%7
+        print(' {} to {} is {} day{}, which is {} week{} and {} day{}'.format(
+            first.isoformat(), last.isoformat(),
+            elapsed, '' if elapsed==1 else 's',
+            num_weeks, '' if num_weeks == 1 else 's',
+            rem_days, '' if rem_days == 1 else 's'))
+
+        WORK_DAYS_PER_WEEK = 5                  # yes, hard-coded
+        expected_work_days = num_weeks * WORK_DAYS_PER_WEEK
+        if rem_days > WORK_DAYS_PER_WEEK:
+            expected_work_days += WORK_DAYS_PER_WEEK
+        else:
+            expected_work_days += rem_days
+        print(' Number of days worked is {}, vaguely expecting {}'.format(
+            days_worked, expected_work_days))
+
 
 def report_file(filename):
     """Report on the hours described in the given filename.
