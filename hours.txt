@@ -1,8 +1,12 @@
 # Example hours
 
-:expect Mon=6.5, Thu=6.0
+# Use this set of expected hours for a more "realistice" expectation
+:expect Mon=6.5, Tue=7.5, Wed=7.5, Thu=6.0, Fri=7.5
+# Use this set of expected hours to simulate a 30 hour week
+#:expect Mon=6.0, Tue=6.0, Wed=6.0, Thu=6.0, Fri=6.0
 
 :year 2013
+:days 20
 
 Tue  3 Sep  6.5     -- initial discussions, etc.
 Wed  4 Sep  8.5     -- my laptop, exploring, notebook
