@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 
-"""Report on cumulative time
+"""Report on cumulative time for a customer project.
 
 Usage::
 
@@ -26,6 +26,9 @@ where:
 
 Anything after a '#' is ignored, and empty lines are ignored.
 
+Date records must be in the correct order (ascending date), but there is no
+requirement to specify hours for every day.
+
 For what it is worth, this is (c) copyright Tibs, but to be honest you may
 use it as you wish, although I provide no support.
 """
@@ -42,6 +45,9 @@ class GiveUp(Exception):
 
 MONTHS = {'Jan':1, 'Feb':2, 'Mar':3, 'Apr':4, 'May':5, 'Jun':6,
           'Jul':7, 'Aug':8, 'Sep':9, 'Oct':10, 'Nov':11, 'Dec':12}
+
+MONTH_NAME = {1:'Jan', 2:'Feb', 3:'Mar', 4:'Apr', 5:'May', 6:'Jun',
+              7:'Jul', 8:'Aug', 9:'Sep', 10:'Oct', 11:'Nov', 12:'Dec'}
 
 DAYS = ('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')
 
@@ -424,15 +430,28 @@ class Report(object):
             >>> r = Report()
             >>> lines = ['# a comment',
             ...          ':year 2003',
+            ...          'Mon 1 Sep  8.0',
             ...          'Wed 3 Sep  19.0  -- a comment',
             ...          ':year 2013',
             ...          'Thu 12 Sep 8.0  -- a comment']
             >>> r.report_lines(lines)
-
+            -Mon 01 Sep 2003  8.0
+             Wed 03 Sep 2003 19.0 (a comment)
+             Thu 12 Sep 2013  8.0 (a comment)
+             Total:          35.0
         """
-        prev = None
-        for data in self.parse_lines(line_source):
-            pass
+        total = 0.0
+        for date, day, hours, comment in self.parse_lines(line_source):
+            print('{}{} {:02d} {} {:4d} {:4.1f}{}'.format(
+                '-' if day == 'Mon' else ' ',
+                day, date.day, MONTH_NAME[date.month], date.year,
+                hours,
+                ' ('+comment+')' if comment else ''))
+
+
+            total += hours
+
+        print(' Total:        {:6.1f}'.format(total))
 
 def report_file(filename):
     """Report on the hours described in the given filename.
