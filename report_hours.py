@@ -550,7 +550,7 @@ class Report(object):
                     62.0 hours is 8.3 (7.5-hour) days
                     or 41% of the project total 20 days (150.0 hours)
              Hours per week is currently set to 30.0
-             with hours (Mon-Fri) as 6.0, 6.0, 6.0, 6.0, 6.0, 0.0, 0.0
+             with hours (Mon-Sun) as 6.0, 6.0, 6.0, 6.0, 6.0, 0.0, 0.0
             >>> r.report_lines(lines, True)
             2013
             -Mon  2 Sep  4.0 |********````          |  -2.0 |    ----:                               (first day)
@@ -569,7 +569,7 @@ class Report(object):
                     62.0 hours is 8.3 (7.5-hour) days
                     or 41% of the project total 20 days (150.0 hours)
              Hours per week is currently set to 30.0
-             with hours (Mon-Fri) as 6.0, 6.0, 6.0, 6.0, 6.0, 0.0, 0.0
+             with hours (Mon-Sun) as 6.0, 6.0, 6.0, 6.0, 6.0, 0.0, 0.0
         """
         year = None
         total = 0.0
@@ -650,7 +650,7 @@ class Report(object):
 
         print(' Hours per week is currently set to {:.1f}'.format(
             sum(self.hours_per_day.values())))
-        print(' with hours (Mon-Fri) as', end=' ')
+        print(' with hours (Mon-Sun) as', end=' ')
         self.report_hours_per_day(False)
 
 def report_file(filename, show_comments):
