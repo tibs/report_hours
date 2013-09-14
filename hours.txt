@@ -6,7 +6,7 @@
 #:expect Mon=6.0, Tue=6.0, Wed=6.0, Thu=6.0, Fri=6.0
 
 :year 2013
-:days 20
+:days 48
 
 Tue  3 Sep  6.5     -- initial discussions, etc.
 Wed  4 Sep  8.5     -- my laptop, exploring, notebook

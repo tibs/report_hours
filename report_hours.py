@@ -545,10 +545,10 @@ class Report(object):
              Thu 12 Sep  5.5 |***********`          |   8.0 |        :++++++++++++++++
              Fri 13 Sep  0.0 |````````````          |   0.0 |        :
             <BLANKLINE>
-             2013-09-02 to 2013-09-13 is 12 days, which is 1 week and 5 days
-             In that period, worked 62.0 hours, expected 54.0, balance +8.0 hours
-             Worked on 9 days, out of 10 weekdays
-             Worked 8.3 (7.5-hour) days, out of project total 20
+            Summary for 2013-09-02 to 2013-09-13:
+             Worked 62.0 hours over 9 days, expected 54.0, balance +8.0 hours
+                    62.0 hours is 8.3 (7.5-hour) days
+                    or 41% of the project total 20 days (150.0 hours)
              Hours per week is currently set to 30.0
              with hours (Mon-Fri) as 6.0, 6.0, 6.0, 6.0, 6.0, 0.0, 0.0
             >>> r.report_lines(lines, True)
@@ -564,10 +564,10 @@ class Report(object):
              Thu 12 Sep  5.5 |***********`          |   8.0 |        :++++++++++++++++
              Fri 13 Sep  0.0 |````````````          |   0.0 |        :                               (not at this work today)
             <BLANKLINE>
-             2013-09-02 to 2013-09-13 is 12 days, which is 1 week and 5 days
-             In that period, worked 62.0 hours, expected 54.0, balance +8.0 hours
-             Worked on 9 days, out of 10 weekdays
-             Worked 8.3 (7.5-hour) days, out of project total 20
+            Summary for 2013-09-02 to 2013-09-13:
+             Worked 62.0 hours over 9 days, expected 54.0, balance +8.0 hours
+                    62.0 hours is 8.3 (7.5-hour) days
+                    or 41% of the project total 20 days (150.0 hours)
              Hours per week is currently set to 30.0
              with hours (Mon-Fri) as 6.0, 6.0, 6.0, 6.0, 6.0, 0.0, 0.0
         """
@@ -627,37 +627,26 @@ class Report(object):
         first_day = first.toordinal()
         last_day = last.toordinal()
         elapsed = last_day - first_day + 1
-        num_weeks = elapsed//7
-        rem_days = elapsed%7
-        print(' {} to {} is {} day{}, which is {} week{} and {} day{}'.format(
-            first.isoformat(), last.isoformat(),
-            elapsed, '' if elapsed==1 else 's',
-            num_weeks, '' if num_weeks == 1 else 's',
-            rem_days, '' if rem_days == 1 else 's'))
-        print(' In that period, worked {:.1f} hour{}, expected {:.1f},'
-                ' balance {:+.1f} hour{}'.format(
+
+        print('Summary for {} to {}:'.format(
+            first.isoformat(), last.isoformat()))
+
+        print(' Worked {:.1f} hour{} over {} day{}, expected {:.1f},'
+              ' balance {:+.1f} hour{}'.format(
             total, '' if total == 1 else 's',
+            days_worked, '' if days_worked==1 else 's',
             total_expected,
             total_extra, '' if total_extra == 1 else 's'))
 
-        WORK_DAYS_PER_WEEK = 5                  # yes, hard-coded
-        expected_work_days = num_weeks * WORK_DAYS_PER_WEEK
-        if rem_days > WORK_DAYS_PER_WEEK:
-            expected_work_days += WORK_DAYS_PER_WEEK
-        else:
-            expected_work_days += rem_days
-        print(' Worked on {} day{}, out of {} weekday{}'.format(
-            days_worked, '' if days_worked==1 else 's',
-            expected_work_days, '' if expected_work_days==1 else 's'))
-
         virtual_days = total / 7.5
+        print('        {:.1f} hour{} is {:.1f} (7.5-hour) day{}'.format(
+            total, '' if total == 1 else 's',
+            virtual_days, '' if virtual_days==1 else 's'))
         if self.project_days:
-            print(' Worked {:.1f} (7.5-hour) day{}, out of project total {}'.format(
-                virtual_days, '' if virtual_days==1 else 's',
-                self.project_days))
-        else:
-            print(' Worked {:.1f} (7.5-hour) day{}'.format(
-                virtual_days, '' if virtual_days==1 else 's'))
+            print('        or {:.0%} of the project total {} day{} ({:.1f} hours)'.format(
+                total / (self.project_days * 7.5),
+                self.project_days, '' if self.project_days == 1 else 's',
+                self.project_days*7.5))
 
         print(' Hours per week is currently set to {:.1f}'.format(
             sum(self.hours_per_day.values())))
