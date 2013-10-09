@@ -359,7 +359,12 @@ class Report(object):
             try:
                 hours = float(hours)
             except ValueError:
-                raise GiveUp('Expected floating point hours, not {!r}'.format(hours))
+                # Make a crude check for a possible common mistake
+                if '..' in hours and ':' in hours:
+                    raise GiveUp('Expected floating point hours, not {!r}'
+                                 ' - did you mean "for {}"?'.format(hours, hours))
+                else:
+                    raise GiveUp('Expected floating point hours, not {!r}'.format(hours))
 
         return date, day_name, hours, comment
 
