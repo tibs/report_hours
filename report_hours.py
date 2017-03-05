@@ -4,21 +4,31 @@
 
 Usage::
 
-  report_hours.py [-c] [-comments]              -- report on hours.txt
-  report_hours.py [-c] [-comments] <filename>   -- report on <filename>
-  report_hours.py -doctest                      -- run self-tests
+  report_hours.py              -- report on hours.txt
+  report_hours.py <filename>   -- report on <filename>
 
-Defaults to reading a file called "hours.txt" in the current directory.
+Switches::
+
+    -c, -comments   -- show the text after "--" on recorded hours lines
+    -g, -graph      -- show a "graph" of balance-of-hours plus/minus for
+                       the project so far, down the right hand side
+    -doctest        -- run the doctests. This ignores any filename.
+
+Defaults to reading a file called "hours.txt" in the same directory as
+this script.
 
 Lines in the text file may be:
 
-    * :expect <day-name>=<hours>[, <day-name>=hours> ...]
     * :year <year>
+    * :days <number-of-days>
+    * :expect <day-name>=<hours>[, <day-name>=hours> ...]
     * <day-name> <day> <month> <hours> [-- <text>]
     * <day-name> <day> <month> for <timespan> [<timespan> ...] [-- <text>]
 
 where:
 
+    * <year> is a year
+    * <number-of-days> is the number of days for a project (PO)
     * <day-name> is a three-letter day mnemonic (case doesn't matter)
     * <month> is a three-letter month mnemonic (case doesn't matter)
     * <timespan> is of the form <hh>:<mm>..<hh>:<mm> (<hh> may be 1 or 2
@@ -26,11 +36,28 @@ where:
 
 Anything after a '#' is ignored, and empty lines are ignored.
 
+So a typical file might look like::
+
+    :year 2013
+    # The initial PO is for 20 7.5-hour days, i.e., 150 hours
+    :days 20
+    :expect Mon=6.5, Tue=7.5, Wed=7.5, Thu=6.0, Fri=7.5
+
+    Tue  3 Sep  6.5     -- initial discussions, etc.
+    Wed  4 Sep  8.5     -- my laptop, exploring, notebook
+    Thu  5 Sep  for 9:00..12:00 12:30..18:00
+    Fri  6 Sep  for 9:30..12:00 12:30..17:00
+
 Date records must be in the correct order (ascending date), but there is no
 requirement to specify hours for every day.
 
-If the switch '-c' or '-comment' is given, then the <text> after '--' will
-also be shown.
+There is no intent to support multiple projects in a single file. My normal
+use is to have both report_hours.py and hours.txt in a Dropbox folder, which
+is specific to the customer.
+
+XXX Add the ability to specify new (continuation) POs with an extra :days
+XXX line. This should report hours per PO, in case the *actual* hours
+XXX worked overlap the boundary,
 
 For what it is worth, this is (c) copyright Tibs, but to be honest you may
 use it as you wish, although I provide no support.
@@ -39,6 +66,7 @@ use it as you wish, although I provide no support.
 from __future__ import division
 from __future__ import print_function
 
+import os
 import sys
 import re
 import datetime
@@ -238,8 +266,14 @@ class Report(object):
             (datetime.date(2003, 9, 4), 'Thu', 8.0, 'time spans')
             >>> r.parse_hours_line('Fri 12 Sep for 8:30..9:30 -- 8:30, not 08:30')
             (datetime.date(2003, 9, 12), 'Fri', 1.0, '8:30, not 08:30')
+            >>> r.parse_hours_line('Fri 12 Sep holiday -- today')
+            (datetime.date(2003, 9, 12), 'Fri', 7.5, 'today')
+            >>> r.parse_hours_line('Fri 12 Sep pubhol -- today')
+            (datetime.date(2003, 9, 12), 'Fri', 7.5, 'today')
+            >>> r.parse_hours_line('Fri 12 Sep sick -- today')
+            (datetime.date(2003, 9, 12), 'Fri', 7.5, 'today')
 
-        but:
+        but
 
             >>> r.parse_hours_line('Something something something -- fred')
             Traceback (most recent call last):
@@ -304,9 +338,12 @@ class Report(object):
         comment = ' '.join(parts[1:]).lstrip()
 
         spec = data.split()
-        if len(spec) < 4 or (len(spec) > 4 and spec[3] != 'for'):
+        if len(spec) < 4 or (len(spec) > 4 and spec[3] not in ('for', 'holiday')):
             raise GiveUp('Expecting "<day-name> <day> <month> <hours>"\n'
                          'or "<day-name> <day> <month> for <timespan> [<timespan> ...]"\n'
+                         'or "<day-name> <day> <month> holiday"\n'
+                         'or "<day-name> <day> <month> pubhol"\n'
+                         'or "<day-name> <day> <month> sick"\n'
                          'not: {!r}'.format(data))
 
         day_name = spec[0]
@@ -354,6 +391,8 @@ class Report(object):
                 delta = end_time - start_time
                 delta_hours = delta.seconds / (60*60)
                 hours += delta_hours
+        elif spec[3] in ('holiday', 'pubhol', 'sick'):
+            hours = self.hours_per_day[day_name]
         else:
             hours = spec[3]
             try:
@@ -513,7 +552,7 @@ class Report(object):
             right = count*EXTR + (after - count)*SPAC
         return '%s:%s'%(left, right)
 
-    def report_lines(self, line_source, show_comments=False):
+    def report_lines(self, line_source, show_comments=False, with_graph=False):
         """Report on the information from our reader.
 
         If 'show_comments' is True, then we show the extra text after any '--'
@@ -537,7 +576,7 @@ class Report(object):
             ...          'Thu 12 Sep  for 9:30..12:00  12:30..15:30 # i.e., 2.5 + 3 = 5.5',
             ...          'Fri 13 Sep  0.0     -- not at this work today',
             ...         ]
-            >>> r.report_lines(lines, False)
+            >>> r.report_lines(lines, False, True)
             2013
             -Mon  2 Sep  4.0 |********````          |  -2.0 |    ----:
              Tue  3 Sep  6.5 |************^         |  -1.5 |     ---:
@@ -551,12 +590,15 @@ class Report(object):
              Fri 13 Sep  0.0 |````````````          |   0.0 |        :
             <BLANKLINE>
             Summary for 2013-09-02 to 2013-09-13:
-             Worked 62.0 hours over 9 days, expected 54.0, balance +8.0 hours
-                    62.0 hours is 8.3 (7.5-hour) days
+             Worked 62.0 hours over 9 days
+                    62.0 hours is   8.3 (7.5-hour) days
                     or 41% of the project total 20 days (150.0 hours)
+                       leaving 88.0 hours, or 11.7 (7.5-hour) days, to do
              Hours per week is currently set to 30.0
-             with hours (Mon-Sun) as 6.0, 6.0, 6.0, 6.0, 6.0, 0.0, 0.0
-            >>> r.report_lines(lines, True)
+             with hours-per-day (Mon-Sun) as 6.0, 6.0, 6.0, 6.0, 6.0, 0.0, 0.0
+             Using the hours-per-day currently set, expected 54.0 hours
+             Giving a balance +8.0 hours, +1.1 days
+            >>> r.report_lines(lines, True, True)
             2013
             -Mon  2 Sep  4.0 |********````          |  -2.0 |    ----:                               (first day)
              Tue  3 Sep  6.5 |************^         |  -1.5 |     ---:                               (initial discussions, etc.)
@@ -569,12 +611,36 @@ class Report(object):
              Thu 12 Sep  5.5 |***********`          |   8.0 |        :++++++++++++++++
              Fri 13 Sep  0.0 |````````````          |   0.0 |        :                               (not at this work today)
             <BLANKLINE>
-            Summary for 2013-09-02 to 2013-09-13:
-             Worked 62.0 hours over 9 days, expected 54.0, balance +8.0 hours
-                    62.0 hours is 8.3 (7.5-hour) days
+            Summary for 2013-09-02 to 2013-09-13 (1 week):
+             Worked 62.0 hours over 9 days
+                    62.0 hours is   8.3 (7.5-hour) days
                     or 41% of the project total 20 days (150.0 hours)
+                       leaving 88.0 hours, or 11.7 (7.5-hour) days, to do
              Hours per week is currently set to 30.0
              with hours (Mon-Sun) as 6.0, 6.0, 6.0, 6.0, 6.0, 0.0, 0.0
+             Given the hours-per-day currently set, expected 54.0 hours, balance +8.0
+            >>> r.report_lines(lines, False, False)
+            2013
+            -Mon  2 Sep  4.0 |********````          |
+             Tue  3 Sep  6.5 |************^         |
+             Wed  4 Sep  8.5 |************^^^^^     |
+             Thu  5 Sep  6.5 |************^         |
+             Fri  6 Sep  8.5 |************^^^^^     |  34.0
+            -Mon  9 Sep  7.0 |************^^        |
+             Tue 10 Sep  7.5 |************^^^       |
+             Wed 11 Sep  8.0 |************^^^^      |
+             Thu 12 Sep  5.5 |***********`          |
+             Fri 13 Sep  0.0 |````````````          |  28.0
+            <BLANKLINE>
+            Summary for 2013-09-02 to 2013-09-13 (1 week):
+             Worked 62.0 hours over 9 days
+                    62.0 hours is   8.3 (7.5-hour) days
+                    or 41% of the project total 20 days (150.0 hours)
+                       leaving 88.0 hours, or 11.7 (7.5-hour) days, to do
+             Hours per week is currently set to 30.0
+             with hours-per-day (Mon-Sun) as 6.0, 6.0, 6.0, 6.0, 6.0, 0.0, 0.0
+             Using the hours-per-day currently set, expected 54.0 hours
+             Giving a balance +8.0 hours, +1.1 days
         """
         year = None
         total = 0.0
@@ -582,6 +648,7 @@ class Report(object):
         total_extra = 0.0
         first = last = None
         days_worked = 0
+        week_total = 0.0
         for date, day, hours, comment in self.parse_lines(line_source):
 
             if date.year != year:
@@ -606,15 +673,26 @@ class Report(object):
 
             parts = []
             parts.append('{}{} {:2d} {}'.format(
-                '-' if day == 'Mon' else ' ',
+                '-' if day == 'Mon' else
+                '~' if day in ('Sat', 'Sun') else ' ',
                 day, date.day, MONTH_NAME[date.month]))
 
             parts.append('{:4.1f} |{}'.format(hours, picture1))
 
-            if hours:
-                parts.append('{:5.1f} |{}'.format(total_extra, picture2))
+            if with_graph:
+                if hours:
+                    parts.append('{:5.1f} |{}'.format(total_extra, picture2))
+                else:
+                    parts.append('{:5.1f} |{}'.format(0.0, picture2))
             else:
-                parts.append('{:5.1f} |{}'.format(0.0, picture2))
+                week_total += hours
+                # Treating Friday as the end-of-week for reporting week totals
+                # does mean that if I ever work Saturday or Sunday for a
+                # project it will get reported the next week, which may be a
+                # bit odd - but worry about that if/when it becomes a concern
+                if day == 'Fri':
+                    parts.append('{:5.1f}'.format(week_total))
+                    week_total = 0.0
 
             if show_comments and comment:
                 parts.append('({})'.format(comment))
@@ -629,22 +707,23 @@ class Report(object):
 
         print()
 
+        if not with_graph and last and last.weekday() != 4:    # i.e., Friday
+            print('Week so far {:.1f} hours'.format(week_total))
+
         first_day = first.toordinal()
         last_day = last.toordinal()
         elapsed = last_day - first_day + 1
+        weeks = elapsed // 7
 
-        print('Summary for {} to {}:'.format(
-            first.isoformat(), last.isoformat()))
+        print('Summary for {} to {} ({} week{}):'.format(
+            first.isoformat(), last.isoformat(), weeks, '' if weeks == 1 else 's'))
 
-        print(' Worked {:.1f} hour{} over {} day{}, expected {:.1f},'
-              ' balance {:+.1f} hour{}'.format(
+        print(' Worked {:.1f} hour{} over {} day{}'.format(
             total, '' if total == 1 else 's',
-            days_worked, '' if days_worked==1 else 's',
-            total_expected,
-            total_extra, '' if total_extra == 1 else 's'))
+            days_worked, '' if days_worked==1 else 's'))
 
         virtual_days = total / 7.5
-        print('        {:.1f} hour{} is {:.1f} (7.5-hour) day{}'.format(
+        print('        {:.1f} hour{} is   {:.1f} (7.5-hour) day{}'.format(
             total, '' if total == 1 else 's',
             virtual_days, '' if virtual_days==1 else 's'))
         if self.project_days:
@@ -652,13 +731,31 @@ class Report(object):
                 total / (self.project_days * 7.5),
                 self.project_days, '' if self.project_days == 1 else 's',
                 self.project_days*7.5))
+            hours_left = self.project_days * 7.5 - total
+            full_days_left = self.project_days - virtual_days
+            print('           leaving {:.1f} hour{}, or {:.1f} (7.5-hour)'
+                  ' day{}, to do'.format(
+                hours_left,
+                '' if hours_left == 1 else 's',
+                full_days_left,
+                '' if full_days_left == 1 else 's'))
 
         print(' Hours per week is currently set to {:.1f}'.format(
             sum(self.hours_per_day.values())))
-        print(' with hours (Mon-Sun) as', end=' ')
+        print(' with hours-per-day (Mon-Sun) as', end=' ')
         self.report_hours_per_day(False)
 
-def report_file(filename, show_comments):
+        print(' Using the hours-per-day currently set, expected {:.1f}'
+              ' hours'.format(total_expected))
+
+        if total_extra > 7.5:
+            print(' Giving a balance of {:+.1f} hour{}, {:+.1f} days'.format(total_extra,
+                '' if abs(total_extra)==1.0 else 's', total_extra/7.5))
+        else:
+            print(' Giving a balance of {:+.1f} hour{}'.format(total_extra,
+                '' if abs(total_extra)==1.0 else 's'))
+
+def report_file(filename, show_comments=False, with_graph=False):
     """Report on the hours described in the given filename.
 
     If 'show_comments' is True, then we show the extra text after any '--'
@@ -667,16 +764,19 @@ def report_file(filename, show_comments):
 
     r = Report()
     with open(filename) as fd:
-        r.report_lines(fd, show_comments)
+        r.report_lines(fd, show_comments, with_graph)
 
 def report(args):
     filename = None
     show_comments = False
+    with_graph = False
     while args:
         word = args.pop(0)
         if word in ('-h', '-help', '--help', '/?', '/help'):
             print(__doc__)
             return
+        elif word in ('-g', '-graph'):
+            with_graph = True
         elif word in ('-c', '-comments'):
             show_comments = True
         elif word == '-doctest':
@@ -688,18 +788,20 @@ def report(args):
                 print('The light is GREEN')
             return
         elif word[0] == '-' and not os.path.exists(word):
-            raise GiveUp('Unexpected switch {:r}'.format(word))
+            raise GiveUp('Unexpected switch {!r}'.format(word))
         elif not filename:
             filename = word
         else:
-            raise GiveUp('Unexpected argument {:r} (already got'
-                         ' filename {:r}'.format(word. filename))
+            raise GiveUp('Unexpected argument {!r} (already got'
+                         ' filename {!r}'.format(word. filename))
 
     if not filename:
-        filename = 'hours.txt'
+        this_file = __file__
+        this_dir = os.path.split(this_file)[0]
+        filename = os.path.join(this_dir, 'hours.txt')
 
     try:
-        report_file(filename, show_comments)
+        report_file(filename, show_comments, with_graph)
     except GiveUp as e:
         raise GiveUp('Error reading file {!r}\n{}'.format(filename, e))
 
